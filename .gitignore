@@ -4,6 +4,9 @@
 # chemdraw/cdxml_/
 # chemdraw/out/
 # maps/_structure_id_map.csv
+.relabel_last_run_epoch
+.chemDraw_last_run_epoch
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
