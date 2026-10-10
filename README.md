@@ -1,83 +1,437 @@
 # A system for managing compound numbering
 
-Numbering compounds is a common headache for chemistry researchers when preparing long chemistry documents, as a single missed compound might involve hours of tedious and error-prone renumbering, both in the text and all your ChemDraw files.
-This repository provides a minimal example of the system I used during the preparation of my PhD thesis to circumvent this and increase the reliability of compound numbering.
-The system allows you to only refer to compounds by a compound ID, such as a lab book reference, throughout your LaTeX document and ChemDraw files.
-The compound numbers to which the compound IDs map to are separately defined in a `.csv` file.
-The combined action of a `\cmpd` LaTeX command, python script, and applescript will keep the numbering system coordinated and ensure there is no inconsistency between your ChemDraws and your text.
-The other key advantage is that if you need to (inevitably) change your compound numbering, for example, inserting or removing compounds, which would ordinarily cause an extremely annoying frameshift, you only need to edit the `.csv` file by shifting all the number fields up or down, which is facile in a text editor like Vim, or Microsoft Excel.
-Elements of the system may be used in your own documents and adapted to your own use cases.
+Keeping compound numbers consistent across a long chemistry document can be surprisingly difficult. If a compound is inserted or removed, every subsequent compound may need to be renumbered—not only in the text, but also across multiple ChemDraw files. A single change can therefore result in hours of tedious and error-prone manual editing.
 
-## Design, usage, and function
+This repository provides a simple system for avoiding that problem. It is based on the workflow I used while preparing my PhD thesis, where it allowed me to manage hundreds of numbered compounds consistently across LaTeX and ChemDraw.
 
-A centralised `maps/structure_id_map.csv` file defines a mapping of compound IDs to a compound number.
-In the examples contained in this repository, the `.csv` maps compound `LL03-05 -> 133` and `LL03-06 -> 134`.
-A third column in the `.csv` file is included called 'notes' where additional description of the compounds can be entered to make the mapping file more coherent and human readable; this is purely for convenience.
+The central idea is simple:
 
-The python script `scripts/relabel_cdxmls.py` will read the mapping file, disregard the 'notes' column, take the data contained in the compound and label columns, and strip white space around the data to create a 1:1 dictionary mapping.
-It will then sequentially search for all `.cdxml` files in the directory `chemdraw/cdxml/` to renumber.
-To avoid editing the original source file, it will first clone all `.cdxml` files it finds into a mirror directory `chemdraw/cdxml_`, which will be edited by the python script.
+**Never refer to a compound by its final compound number in your source files. Instead, refer to it using a permanent compound ID, such as a lab-book reference.**
 
-In your original ChemDraw `.cdxml` files, instead of naming compounds with a number, you name the compounds with a tag `CMPD:`, followed by your compound ID; which must consist only of alphanumerical characters or hyphens; So :x: LL03_05 :white_check_mark: LL03-05.
-You can allow additional characters by changing the regex expression in the `scripts/relabel_cdxmls.py` file but I would personally recommend against it and some other characters will mess up the command calls in your `.tex` files.
-To ensure proper alignment is maintained after relabelling, the alignment in the textbox containing your compound ID tag should be **centered**.
+For example, rather than hard-coding compound **133** throughout your LaTeX document and ChemDraw files, you might use the permanent ID:
+
+```text
+LL03-05
+```
+
+A central CSV file then defines the mapping:
+
+```text
+LL03-05 -> 133
+```
+
+The system automatically converts these IDs into the appropriate compound numbers when preparing the final document.
+
+Three components work together to keep everything synchronised:
+
+- a Python script relabels compounds in ChemDraw `.cdxml` files;
+- an AppleScript exports the relabelled ChemDraw files to PDF; and
+- a LaTeX `\cmpd` command converts compound IDs into compound numbers in the text.
+
+As a result, changing the numbering scheme only requires editing the central CSV file. If, for example, a compound is inserted and compounds 133–200 need to become 134–201, you update those values in the CSV rather than manually editing every occurrence in the thesis and every ChemDraw file.
+
+The individual components are intentionally simple and can be adapted independently for other workflows.
+
+## How it works
+
+The workflow can be summarised as:
+
+```text
+                         maps/structure_id_map.csv
+                                  |
+                    +-------------+-------------+
+                    |                           |
+                    v                           v
+             Python relabelling            LaTeX lookup
+                    |                           |
+                    v                           |
+         ChemDraw source (.cdxml)               |
+                    |                           |
+                    v                           |
+         Relabelled .cdxml files                |
+                    |                           |
+                    v                           |
+            AppleScript export                  |
+                    |                           |
+                    v                           v
+              ChemDraw PDFs ------------> Final LaTeX PDF
+```
+
+The CSV mapping file is therefore the **single source of truth** for compound numbering.
+
+## 1. Define the compound-number mapping
+
+The central mapping is stored in:
+
+```text
+maps/structure_id_map.csv
+```
+
+Each compound has a permanent ID and a corresponding display number. For example, the mapping supplied with this repository contains:
+
+```text
+LL03-05 -> 133
+LL03-06 -> 134
+```
+
+The CSV also contains a `notes` column. This can contain names, descriptions, or other information that makes the mapping easier to understand:
+
+```text
+compound,label,notes
+LL03-05,133,Example compound
+LL03-06,134,Another example compound
+```
+
+The `notes` column is ignored by the relabelling system and exists only for human readability.
+
+## 2. Label compounds by ID in ChemDraw
+
+Source ChemDraw files are stored in:
+
+```text
+chemdraw/cdxml/
+```
+
+Instead of assigning compounds their final numbers directly in ChemDraw, label them using the prefix `CMPD:` followed by the permanent compound ID.
+
+For example:
+
+```text
+CMPD:LL03-05
+```
+
+Do **not** write:
+
+```text
+133
+```
+
+The compound ID should contain only alphanumeric characters and hyphens.
+
+For example:
+
+```text
+LL03-05    ✓
+LL03_05    ✗
+```
+
+This restriction is defined by a regular expression in `scripts/relabel_cdxmls.py`. You can modify the expression if your IDs require additional characters, although this is not recommended: some characters can also cause problems when the IDs are used as arguments to commands in `.tex` files.
+
+The text box containing the `CMPD:` tag should be **centre-aligned**. This ensures that the label remains correctly positioned when an ID such as `CMPD:LL03-05` is replaced by a much shorter number such as `133`.
 
 ![](examples/ChemDrawSourceFile.png)
 
-As `.cdxml` is a human-readable text format, the python script will use regex to find all instances of the `CMPD:` tag and replace it with the appropriate label, so `CMPD:LL03-05` becomes `133`.
+## 3. Relabel the ChemDraw files
+
+The Python script:
+
+```text
+scripts/relabel_cdxmls.py
+```
+
+reads `maps/structure_id_map.csv` and constructs a one-to-one mapping between compound IDs and compound numbers.
+
+During this process, it:
+
+1. reads the `compound` and `label` columns;
+2. ignores the `notes` column;
+3. strips surrounding whitespace from the relevant values; and
+4. creates a lookup mapping from each compound ID to its label.
+
+The script then searches for `.cdxml` files in:
+
+```text
+chemdraw/cdxml/
+```
+
+The original files are **not modified**.
+
+Instead, the script copies them to the mirror directory:
+
+```text
+chemdraw/cdxml_/
+```
+
+and performs all relabelling on those copies.
+
+Because CDXML is a human-readable text format, the script can search the copied files for `CMPD:` tags and replace them with the corresponding numbers.
+
+For example:
+
+```text
+CMPD:LL03-05
+```
+
+becomes:
+
+```text
+133
+```
 
 ![](examples/ChemDrawRelabelledFile.png)
 
-Finally, the python script will generate a new `.csv` file called `maps/_structure_id_map.csv`, which will be a clone of the source `maps/structure_id_map.csv` file, except with all white space stripped out, and only the two relevant columns (compound & label) remaining.
-This is file will later be loaded by LaTeX during compilation.
+This separation means that your source ChemDraw files always retain the permanent compound IDs, while the generated copies contain the current display numbers.
 
-To save the user having to now manually export the relabelled `.cdxml` file as a `.pdf` for inclusion into LaTeX document, running the applescript `scripts/cdxml2pdf.applescript` will search for all `.cdxml` files in the `chemdraw/cdxml_/` mirror directory and command the ChemDraw application to sequentially open each one and export them as a `.pdf` file of the same name in the `chemdraw/out/` directory.
-These `.pdf` files can then be included in your LaTeX document with the `\includegraphics` command.
+## 4. Generate the LaTeX lookup table
 
-In your LaTeX document, the contents of `relabel.tex` need to included in the document preamble using an `\input` directive.
-The file contains code which uses the `datatools` package to read the `maps/_structure_id_map.csv` file at the start of compilation and load it into memory as a lookup table called `chemmap`.
-The file also defines the `\cmpd` command which can be used throughout the document.
-Calling the command e.g. `\cmpd{LL03-05}` will trigger a lookup of `chemmap`, which will use `LL03-05` as the key and will replace it with whatever corresponding value it finds, in this case `133`.
-If no value is found, the query key is outputted.
+The Python script also generates:
 
-During certain points of writing and editorial review, it may be easier to read the document with the compound ID printed, rather than the relabelled number; in these cases changing the first line of `maps/structure_id_map.csv` file from `RELABEL=TRUE` to `RELABEL=FALSE` will disable relabelling.
-In the `relabel.tex` file, `\relabelCmpdstrue` can be commented out and the `\relabelCmpdsfalse` uncommented to toggle relabelling off specifically in the main text.
+```text
+maps/_structure_id_map.csv
+```
 
-The sum of these scripts is:
+This is a processed version of `maps/structure_id_map.csv` containing only the columns required by LaTeX, with unnecessary whitespace removed.
 
-Original LaTeX document with relabelling disabled:
+The generated file is subsequently loaded during LaTeX compilation and used to translate compound IDs into compound numbers in the document text.
+
+You should therefore edit `maps/structure_id_map.csv`, not the generated `_structure_id_map.csv`.
+
+## 5. Export the relabelled ChemDraw files to PDF
+
+After the `.cdxml` files have been relabelled, they need to be exported to a format that can be included in the LaTeX document.
+
+The AppleScript:
+
+```text
+scripts/cdxml2pdf.applescript
+```
+
+automates this process.
+
+It searches:
+
+```text
+chemdraw/cdxml_/
+```
+
+for the generated `.cdxml` files, then instructs ChemDraw to open each file and export it as a PDF with the same filename into:
+
+```text
+chemdraw/out/
+```
+
+These PDFs can then be included normally in LaTeX, for example using:
+
+```latex
+\includegraphics{...}
+```
+
+This avoids having to manually open and export every relabelled ChemDraw file whenever the numbering changes.
+
+## 6. Refer to compounds by ID in LaTeX
+
+The LaTeX-side functionality is defined in:
+
+```text
+relabel.tex
+```
+
+Include this file in the document preamble:
+
+```latex
+\input{relabel.tex}
+```
+
+`relabel.tex` loads the generated:
+
+```text
+maps/_structure_id_map.csv
+```
+
+and creates a lookup table named `chemmap`.
+
+It also defines the `\cmpd` command.
+
+Instead of writing a compound number directly:
+
+```latex
+Compound 133 was obtained...
+```
+
+write:
+
+```latex
+Compound \cmpd{LL03-05} was obtained...
+```
+
+During compilation, `\cmpd{LL03-05}` looks up `LL03-05` in `chemmap` and outputs its current compound number:
+
+```text
+133
+```
+
+If no matching compound is found, the compound ID itself is printed. This makes missing mappings easier to identify.
+
+The important consequence is that **compound numbers are never hard-coded into the main LaTeX source**.
+
+## Temporarily displaying compound IDs
+
+During writing or editorial review, it can sometimes be more useful to see permanent compound IDs than final compound numbers.
+
+Relabelling can therefore be disabled.
+
+Changing the first line of:
+
+```text
+maps/structure_id_map.csv
+```
+
+from:
+
+```text
+RELABEL=TRUE
+```
+
+to:
+
+```text
+RELABEL=FALSE
+```
+
+disables relabelling.
+
+Relabelling can also be controlled specifically for the main LaTeX text from `relabel.tex`. Comment out:
+
+```latex
+\relabelCmpdstrue
+```
+
+and uncomment:
+
+```latex
+\relabelCmpdsfalse
+```
+
+to display compound IDs instead of compound numbers.
+
+For example, the original document with relabelling disabled:
 
 ![](examples/PDFOutputRelabellingOff.png)
 
-is outputted like so:
+can be compiled with relabelling enabled to produce:
 
 ![](examples/PDFOutputRelabellingOn.png)
 
-Since the whole system requires a specific running order of scripts, a bash script `./compile.sh` is used to reproducibly run these scripts and the `pdflatex` compilation passes necessary to produce the final document.
+## Running the complete workflow
 
-## Optimisations
+The individual steps need to run in a specific order. The repository therefore provides:
 
-Since the ChemDraw export process can take quite a while and be quite annoying to see (with tens or hundreds of files sequentially opening and closing), a system is implemented where the time where the scripts are last run is cached in `.chemdraw/cdxml_/.relabel_last_run_epoch` and `.chemdraw/out/.chemDraw_last_run_epoch` files and only ChemDraw files which have been edited *after* the last run time is re-exported.
-An exception is applied when the mapping `maps/structure_id_map.csv` file itself is edited after the last run time.
-In these cases, the system cannot know which labels have changed so *all* ChemDraw files are relabelled and re-exported.
+```bash
+./compile.sh
+```
+
+This script reproducibly runs the relabelling, ChemDraw export, and required `pdflatex` compilation passes to generate the final document.
+
+In normal use, the workflow is therefore:
+
+```text
+1. Edit your LaTeX and source ChemDraw files using permanent compound IDs
+2. Update maps/structure_id_map.csv as required
+3. Run ./compile.sh
+4. Obtain the final document with consistent compound numbering
+```
+
+If the numbering changes, you only need to update the mapping file and recompile.
+
+## Avoiding unnecessary ChemDraw exports
+
+Opening and exporting large numbers of ChemDraw files can be slow and visually distracting, particularly when a project contains tens or hundreds of files.
+
+The system therefore avoids relabelling and exporting files that have not changed.
+
+The last run times are cached in:
+
+```text
+chemdraw/cdxml_/.relabel_last_run_epoch
+chemdraw/out/.chemDraw_last_run_epoch
+```
+
+On subsequent runs, only ChemDraw files modified after the relevant previous run are processed again.
+
+There is one important exception: if
+
+```text
+maps/structure_id_map.csv
+```
+
+has changed since the previous run, **all ChemDraw files are relabelled and re-exported**.
+
+This is necessary because a change to the central mapping may affect the number assigned to any compound, so the system cannot safely determine which ChemDraw files remain valid.
 
 ## Performance
 
-I comfortably used this system in writing my PhD thesis with hundreds of relabelled compounds and tens of `.cdxml` files.
-Most of the time overhead is in the `.applescript` automation which commands the ChemDraw application to open all the files sequentially; this is minimised by the aforementioned optimisations.
-The python script relabelling script takes a fraction of a second to parse through the `.csv` and crunch through hundreds of relabels.
-The `datatools` lookups by the pdflatex interpreter is likewise quite fast, with only fractions of seconds added to overall compilation time for hundreds of lookups.
+I used this system throughout the preparation of my PhD thesis, which contained hundreds of relabelled compounds distributed across tens of `.cdxml` files.
+
+The Python relabelling step is very fast. Parsing the CSV and performing hundreds of replacements generally takes only a fraction of a second.
+
+The LaTeX lookups are similarly inexpensive, adding only a small amount of compilation time even with hundreds of `\cmpd` calls.
+
+The main performance bottleneck is the AppleScript-controlled ChemDraw export, because ChemDraw must open and export files sequentially. The modification-time caching described above substantially reduces this overhead during normal use.
 
 ## Requirements
 
-- Python 3; tested on v3.13 but the python script is basic and only uses the standard library so almost certainly works on other versions
-- macOS; tested on Tahoe 26.6.2, needed for the `.applescript` to run. If anyone wants to try and get it working on Windows, you probably could but would need to write a PowerShell script to emulate the function of the `.applescript`
-- ChemDraw; tested on v26.1.0.6801, worked on an older version as well
-- TeX Live; tested with the 2024 distribution, for `datatools` and `pdflatex`
+The system currently requires:
 
-Note: Overleaf users, TeX Live is installed by default, although I have no idea how you'd run these scripts in your Overleaf environment.
-I'm not an Overleaf expert so maybe someone else could get a system in place.
+- **Python 3** — tested with Python 3.13. The relabelling script uses only the Python standard library and should work with many other Python 3 versions.
+- **macOS** — tested with macOS Tahoe 26.6.2. macOS is currently required for the AppleScript-based ChemDraw export.
+- **ChemDraw** — tested with ChemDraw 26.1.0.6801 and previously used successfully with an older version.
+- **TeX Live** — tested with the 2024 distribution. The LaTeX workflow requires `pdflatex` and the packages used by `relabel.tex`.
+
+### Windows
+
+The Python and LaTeX components should be portable, but the ChemDraw PDF export currently depends on AppleScript.
+
+A Windows implementation would therefore need an equivalent automation mechanism, such as a PowerShell script, to control ChemDraw and export the generated `.cdxml` files.
+
+### Overleaf
+
+TeX Live is available in Overleaf environments, but this workflow also depends on running the Python relabelling script and, more importantly, controlling a local ChemDraw installation to export the `.cdxml` files.
+
+I have not tested an Overleaf-based workflow. Contributions or documentation for an effective Overleaf setup would be welcome.
+
+## Why use this system?
+
+Without this system, inserting a compound early in a long document might require manually changing:
+
+```text
+133 -> 134
+134 -> 135
+135 -> 136
+...
+```
+
+across both the LaTeX source and multiple ChemDraw files.
+
+With this system, the source files continue to refer to permanent IDs:
+
+```text
+LL03-05
+LL03-06
+LL03-07
+```
+
+Only their mappings change:
+
+```text
+LL03-05 -> 134
+LL03-06 -> 135
+LL03-07 -> 136
+```
+
+The next compilation propagates those changes through both the text and ChemDraw figures.
+
+This separates a compound's **identity** from its **display number**, making large-scale renumbering considerably safer and easier.
 
 ## Contributions
 
-Open to any suggestions where improvements can be made, especially if you get this working on other operating systems or Overleaf; open up a pull request!
+Suggestions and improvements are welcome.
+
+In particular, contributions would be useful for:
+
+- support for Windows or Linux;
+- alternative ChemDraw automation approaches;
+- improved Overleaf integration;
+- additional validation and error handling; or
+- improvements to the build workflow.
+
+If you adapt the system to another platform or workflow, please feel free to open a pull request.
