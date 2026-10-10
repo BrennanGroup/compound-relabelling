@@ -1,0 +1,26 @@
+\documentclass{article}
+
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{datatool}  % Critical component for compound relabelling utility
+
+\input{relabel.tex}
+\linespread{1.5}
+
+\begin{document}
+
+\section{Chemical synthesis}
+
+A Gabriel-Colman arrangement of \cmpd{LL03-05} afforded \cmpd{LL03-06} (Figure~\ref{sch:GabrielColman}) in good yield.
+Subsequent transformations...
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[scale=0.7]{chemdraw/out/example.pdf}
+    \caption{
+        The synthesis of \cmpd{LL03-06} from \cmpd{LL03-05} by Gabriel-Colman rearrangement.
+    }
+    \label{sch:GabrielColman}
+\end{figure}
+
+\end{document}

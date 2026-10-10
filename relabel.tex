@@ -1,0 +1,29 @@
+%% Utilities for compound relabelling %%
+
+%% Set as true or false to toggle relabelling
+\newif\ifrelabelCmpds
+\relabelCmpdstrue
+% \relabelCmpdsfalse
+
+\DTLloaddb{chemmap}{maps/_structure_id_map.csv}
+\DTLgetcolumnindex{\keycolidx}{chemmap}{compound}
+\DTLgetcolumnindex{\valcolidx}{chemmap}{label}
+
+% Inner command, do not use directly
+\newcommand{\queryCmpdDB}[1]{%
+    \DTLgetrowindex{\key}{chemmap}{\keycolidx}{#1}%
+    \DTLgetvalue{\value}{chemmap}{\key}{\valcolidx}%
+    \DTLifnull{\value}
+        {\def\value{#1}}% Key not found: print the queried key
+        {}% Key found: print the stored value
+    \edef\out{\value}%
+    \out%
+}
+
+\DeclareRobustCommand{\cmpd}[1]{%
+    \ifrelabelCmpds
+        \textbf{\queryCmpdDB{#1}}%
+    \else
+        \textbf{#1}%
+    \fi
+}

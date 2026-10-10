@@ -1,0 +1,4 @@
+RELABEL=TRUE, ,toggle cdxml relabelling by changing TRUE/FALSE
+compound,label,notes
+LL03-05 ,133  ,saccharin alkylation
+LL03-06 ,134  ,Gabriel-Colman rearrangement
