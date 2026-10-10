@@ -32,6 +32,22 @@ As a result, changing the numbering scheme only requires editing the central CSV
 
 The individual components are intentionally simple and can be adapted independently for other workflows.
 
+## Quick start
+
+If you already have **macOS, ChemDraw, Python 3, and TeX Live** installed, the example can be tried in a few minutes:
+
+1. Clone or download this repository and open a terminal in its root directory.
+2. Open `chemdraw/cdxml/example.cdxml` in ChemDraw. The structures are labelled with permanent IDs such as `CMPD:LL03-05`, rather than final compound numbers.
+3. Open `maps/structure_id_map.csv`. This file assigns those IDs their displayed numbers.
+4. Run `./compile.sh`. ChemDraw will briefly open while the generated CDXML file is exported.
+5. Open `build/main.pdf` to see the numbered compounds in both the text and scheme.
+6. Change a label in `maps/structure_id_map.csv`, run `./compile.sh` again, and confirm that the number changes everywhere.
+
+The files in `chemdraw/cdxml/` are the source files and are never relabelled in place. Generated CDXML files are written to `chemdraw/cdxml_/`, and their exported PDFs are written to `chemdraw/out/`.
+
+> [!IMPORTANT]
+> Keep source `.cdxml` files directly inside `chemdraw/cdxml/`; nested directories are not currently supported. The build now stops with an error for missing mappings, duplicate compound IDs or labels, malformed IDs, or invalid mapping settings rather than silently producing inconsistent output.
+
 ## How it works
 
 The workflow can be summarised as:
@@ -346,7 +362,7 @@ chemdraw/cdxml_/.relabel_last_run_epoch
 chemdraw/out/.chemDraw_last_run_epoch
 ```
 
-On subsequent runs, only ChemDraw files modified after the relevant previous run are processed again.
+On subsequent runs, only ChemDraw files modified after the relevant previous run are processed again. Generated CDXML and PDF files whose source file has been deleted or renamed are also removed, preventing stale figures from surviving in the output directories.
 
 There is one important exception: if
 
@@ -421,6 +437,20 @@ LL03-07 -> 136
 The next compilation propagates those changes through both the text and ChemDraw figures.
 
 This separates a compound's **identity** from its **display number**, making large-scale renumbering considerably safer and easier.
+
+## Validation and tests
+
+The relabelling step deliberately fails early when it detects an inconsistent project. It checks the mapping file for duplicate IDs and labels, empty or malformed values, and invalid `RELABEL` settings. It also checks literal `\cmpd{...}` references in the top-level LaTeX files and `CMPD:` tags in any CDXML file being processed.
+
+The Python code uses only the standard library. Run its automated tests with:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+## Licence
+
+This project is released under the MIT License. See [`LICENSE`](LICENSE).
 
 ## Contributions
 
