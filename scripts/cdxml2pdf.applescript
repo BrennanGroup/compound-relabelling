@@ -3,6 +3,9 @@ set inputFolder to currentDir & "/chemdraw/cdxml_"
 set outputFolder to currentDir & "/chemdraw/out"
 set stateFile to outputFolder & "/.chemDraw_last_run_epoch"
 
+set exportedCount to 0
+set ignoredCount to 0
+
 -- Ensure the output directory exists before Finder or ChemDraw uses it.
 do shell script "mkdir -p " & quoted form of outputFolder
 
@@ -24,14 +27,17 @@ end tell
 
 repeat with aFile in fileList
 	set filePath to POSIX path of (aFile as alias)
+	set fileName to name of aFile
 	set modEpochText to do shell script "stat -f %m " & quoted form of filePath
 	set modEpoch to modEpochText as integer
 
 	if modEpoch > lastRunEpoch then
+		log "Exporting: " & fileName
+		set exportedCount to exportedCount + 1
+
 		tell application "ChemDraw"
 			set openedDocument to open (aFile as alias)
 
-			set fileName to name of aFile
 			if fileName contains "." then
 				set baseName to text 1 thru ((offset of "." in fileName) - 1) of fileName
 			else
@@ -42,8 +48,13 @@ repeat with aFile in fileList
 			save openedDocument as "PDF" in POSIX file outputPath
 			close openedDocument saving no
 		end tell
+	else
+		log "Ignoring: " & fileName
+		set ignoredCount to ignoredCount + 1
 	end if
 end repeat
 
 -- Update the state only after every export has completed successfully.
 do shell script "date +%s > " & quoted form of stateFile
+
+log "Done - Exported: " & exportedCount & ", Ignored: " & ignoredCount & ", Total: " & (count of fileList)

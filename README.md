@@ -32,6 +32,33 @@ As a result, changing the numbering scheme only requires editing the central CSV
 
 The individual components are intentionally simple and can be adapted independently for other workflows.
 
+## Demo
+
+The example below shows the intended workflow: change the compound-number mapping, rebuild the document, and the updated numbering is propagated consistently through both the LaTeX text and ChemDraw figures.
+
+![Demonstration of compound relabelling workflow](examples/demo.gif)
+
+## Table of contents
+
+- [Demo](#demo)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [1. Define the compound-number mapping](#1-define-the-compound-number-mapping)
+- [2. Label compounds by ID in ChemDraw](#2-label-compounds-by-id-in-chemdraw)
+- [3. Relabel the ChemDraw files](#3-relabel-the-chemdraw-files)
+- [4. Generate the LaTeX lookup table](#4-generate-the-latex-lookup-table)
+- [5. Export the relabelled ChemDraw files to PDF](#5-export-the-relabelled-chemdraw-files-to-pdf)
+- [6. Refer to compounds by ID in LaTeX](#6-refer-to-compounds-by-id-in-latex)
+- [Temporarily displaying compound IDs](#temporarily-displaying-compound-ids)
+- [Running the complete workflow](#running-the-complete-workflow)
+- [Avoiding unnecessary ChemDraw exports](#avoiding-unnecessary-chemdraw-exports)
+- [Performance](#performance)
+- [Requirements](#requirements)
+- [Why use this system?](#why-use-this-system)
+- [Validation and tests](#validation-and-tests)
+- [Licence](#licence)
+- [Contributions](#contributions)
+
 ## Quick start
 
 If you already have **macOS, ChemDraw, Python 3, and TeX Live** installed, the example can be tried in a few minutes:
